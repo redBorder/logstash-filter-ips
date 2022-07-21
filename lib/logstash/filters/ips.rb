@@ -63,6 +63,7 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
     if message[SHA256] 
       to_druid = {}
       timestamp = message[TIMESTAMP]
+      hash = message[SHA256]
       to_druid[HASH] = hash
       to_druid[TIMESTAMP] = timestamp
       to_druid[TYPE] = "ips"
