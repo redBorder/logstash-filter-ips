@@ -27,6 +27,7 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
     @aerospike_server = AerospikeConfig::servers if @aerospike_server.empty?
     @aerospike = Client.new(@aerospike_server.first.split(":").first)
     @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
+    @dimensions = ["timestamp","src","dst","sensor_name","sensor_id","client_mac","sensor_uuid"]
   end # def register
 
   public
@@ -81,7 +82,7 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       
       to_druid[FILE_NAME] = file_name unless file_name.nil?
 
-      dimensions.each do |dimension|
+      @dimensions.each do |dimension|
         value = message[dimension]
         
         to_druid[dimension] = value unless value.nil?
