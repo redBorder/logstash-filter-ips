@@ -69,18 +69,18 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       to_druid[TIMESTAMP] = timestamp
       to_druid[TYPE] = "ips"
 
-      file_hostname = message[FILE_HOSTNAME]
-      file_uri = message[FILE_URI]
+      file_hostname = message[FILE_HOSTNAME] || ""
+      file_uri = message[FILE_URI] || ""
 
-      if file_hostname and file_uri
+      if !file_hostname.empty? and !file_uri.empty?
         url = "http://" + file_hostname + file_uri
         to_druid[URL] = url
         @aerospike_store.update_hash_times(timestamp, url, "url")
       end
 
-      file_name = File.basename(file_hostname, file_uri)
+      file_name = File.basename(file_hostname+file_uri) rescue file_name = file_uri
       
-      to_druid[FILE_NAME] = file_name unless file_name.nil?
+      to_druid[FILE_NAME] = file_name unless file_name.nil? or file_name.empty?
 
       @dimensions.each do |dimension|
         value = message[dimension]
@@ -115,7 +115,6 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       generated_events.each do |e|
         yield e
       end
-    
     end
     event.cancel
   end  # def filter(event)
