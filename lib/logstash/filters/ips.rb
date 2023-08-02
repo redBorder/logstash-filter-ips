@@ -23,14 +23,29 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
 
   public
   def register
+    @dimensions = ["timestamp","src","dst","sensor_name","sensor_id","client_mac","sensor_uuid"]
+
     # Add instance variables
     @aerospike_server = AerospikeConfig::servers if @aerospike_server.empty?
-    @aerospike = Client.new(@aerospike_server.first.split(":").first)
-    @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
-    @dimensions = ["timestamp","src","dst","sensor_name","sensor_id","client_mac","sensor_uuid"]
+    @aerospike = nil
+    @aerospike_store = nil
+    register_aerospike_and_set_aerospike_store
+
   end # def register
 
   public
+
+  def register_aerospike_and_set_aerospike_store
+    begin
+      host,port = @aerospike_server.split(":")
+      @aerospike = Client.new(Host.new(host, port))
+      @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
+    rescue Aerospike::Exceptions::Aerospike => ex
+      @aerospike = nil
+      @aerospike_store = nil
+      @logger.error(ex.message)
+    end
+  end
 
   def size_to_range(size)
     range  = nil
@@ -56,6 +71,12 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
   end
 
   def filter(event)
+
+    # Solve the problem that happen when:
+    # at time of registering the plugin the
+    # aerospike was not there
+    register_aerospike_and_set_aerospike_store if @aerospike.nil?
+
     message = {}
     message = event.to_hash
 
