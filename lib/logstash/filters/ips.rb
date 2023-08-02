@@ -23,13 +23,29 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
 
   public
   def register
+    @dimensions = ["timestamp","src","dst","sensor_name","sensor_id","client_mac","sensor_uuid"]
+
     # Add instance variables
     @aerospike_server = AerospikeConfig::servers if @aerospike_server.empty?
-    @aerospike = Client.new(@aerospike_server.first.split(":").first)
-    @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
+    @aerospike = nil
+    @aerospike_store = nil
+    register_aerospike_and_set_aerospike_store
+
   end # def register
 
   public
+
+  def register_aerospike_and_set_aerospike_store
+    begin
+      host,port = @aerospike_server.split(":")
+      @aerospike = Client.new(Host.new(host, port))
+      @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
+    rescue Aerospike::Exceptions::Aerospike => ex
+      @aerospike = nil
+      @aerospike_store = nil
+      @logger.error(ex.message)
+    end
+  end
 
   def size_to_range(size)
     range  = nil
@@ -55,6 +71,12 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
   end
 
   def filter(event)
+
+    # Solve the problem that happen when:
+    # at time of registering the plugin the
+    # aerospike was not there
+    register_aerospike_and_set_aerospike_store if @aerospike.nil?
+
     message = {}
     message = event.to_hash
 
@@ -68,20 +90,20 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       to_druid[TIMESTAMP] = timestamp
       to_druid[TYPE] = "ips"
 
-      file_hostname = message[FILE_HOSTNAME]
-      file_uri = message[FILE_URI]
+      file_hostname = message[FILE_HOSTNAME] || ""
+      file_uri = message[FILE_URI] || ""
 
-      if file_hostname and file_uri
+      if !file_hostname.empty? and !file_uri.empty?
         url = "http://" + file_hostname + file_uri
         to_druid[URL] = url
         @aerospike_store.update_hash_times(timestamp, url, "url")
       end
 
-      file_name = File.basename(file_hostname, file_uri)
+      file_name = File.basename(file_hostname+file_uri) rescue file_name = file_uri
       
-      to_druid[FILE_NAME] = file_name unless file_name.nil?
+      to_druid[FILE_NAME] = file_name unless file_name.nil? or file_name.empty?
 
-      dimensions.each do |dimension|
+      @dimensions.each do |dimension|
         value = message[dimension]
         
         to_druid[dimension] = value unless value.nil?
@@ -114,7 +136,6 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       generated_events.each do |e|
         yield e
       end
-    
     end
     event.cancel
   end  # def filter(event)
