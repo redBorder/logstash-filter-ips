@@ -37,7 +37,7 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
 
   def register_aerospike_and_set_aerospike_store
     begin
-      host,port = @aerospike_server.split(":")
+      host,port = @aerospike_server.first.split(":")
       @aerospike = Client.new(Host.new(host, port))
       @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
     rescue Aerospike::Exceptions::Aerospike => ex
