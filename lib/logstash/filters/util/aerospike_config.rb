@@ -1,7 +1,7 @@
 require 'yaml'
 
 module AerospikeConfig
-  AEROSPIKE_CONFIG_FILE = "/opt/rb/var/www/rb-rails/config/aerospike.yml" unless defined? AEROSPIKE_CONFIG_FILE
+  AEROSPIKE_CONFIG_FILE = '/var/www/rb-rails/config/aerospike.yml'.freeze unless defined? AEROSPIKE_CONFIG_FILE
 
   def self.servers
     servers = []
