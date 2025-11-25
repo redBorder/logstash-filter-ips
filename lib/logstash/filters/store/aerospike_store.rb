@@ -1,7 +1,9 @@
 # encoding: utf-8
+
 require "aerospike"
 require "manticore"
 require "json"
+
 require_relative "../util/malware_constant"
 
 class AerospikeStore
@@ -10,9 +12,9 @@ class AerospikeStore
 
   attr_accessor :aerospike
 
-  def initialize(aerospike, namespace = "malware", reputation_servers)
+  def initialize(aerospike, namespace = 'malware', reputation_servers)
     @aerospike = aerospike
-    @namespace = namespace 
+    @namespace = namespace
     @reputation_servers = reputation_servers
 
     begin
@@ -25,43 +27,41 @@ class AerospikeStore
       @aerospike.create_index(@namespace, "controlFiles", "index_hash_controlFiles", "hash", :string)
       @aerospike.create_index(@namespace, "mailQuarantine", "index_mail_quarantine", "sensor_uuid", :string)
     rescue
-      return nil
+      nil
     end
   end
 
   def update_hash_times(timestamp, data, type)
-    unless data.nil?
-      hash_times_key = Key.new(@namespace, type + "Times" , data) rescue nil
-      data_times = {}
+    return if data.nil?
+    hash_times_key = Key.new(@namespace, type + 'Times', data) rescue nil
+    data_times = {}
 
-      record = @aerospike.get(hash_times_key,[],Policy.new) rescue nil
+    record = @aerospike.get(hash_times_key, [], Policy.new) rescue nil
 
-      if record.nil?
-        data_times["time_start"] = timestamp
-        data_times["time_end"] = timestamp
-      else
-        data_times["time_end"] = timestamp
-      end
-      begin
-        @aerospike.put(hash_times_key, data_times)
-      rescue
-        puts "[aerospike_store] ERROR: Cannot put to aerospike"
-      end
+    if record.nil?
+      data_times['time_start'] = timestamp
+      data_times['time_end'] = timestamp
+    else
+      data_times['time_end'] = timestamp
+    end
+    begin
+      @aerospike.put(hash_times_key, data_times)
+    rescue
+      puts '[aerospike_store] ERROR: Cannot put to aerospike'
     end
   end
 
-  def enrich_ip_scores(message) 
+  def enrich_ip_scores(message)
     data = {}
-    data.merge!message
+    data.merge! message
 
-    src = message["src"]
-    dst = message["dst"]
+    src = message['src']
+    dst = message['dst']
 
-    src_key = Key.new(@namespace, "ipScores", src) rescue nil
-    dst_key = Key.new(@namespace, "ipScores", dst) rescue nil
+    src_key = Key.new(@namespace, 'ipScores', src) rescue nil
+    dst_key = Key.new(@namespace, 'ipScores', dst) rescue nil
 
-    if (!src.nil? and !dst.nil?)
-      
+    if !src.nil? && !dst.nil?
       data_src = @aerospike.get(src_key).bins rescue {}
       data_dst = @aerospike.get(dst_key).bins rescue {}
 
@@ -74,21 +74,21 @@ class AerospikeStore
         data_src.delete(LIST_TYPE)
 
         unless list_type_src.nil?
-          if list_type_src == "black"
+          if list_type_src == 'black'
             score_src = 100
-          elsif list_type_src == "white"
+          elsif list_type_src == 'white'
             score_src = 0
           end
-          data["ip_"+LIST_TYPE] = list_type_src
+          data["ip_#{LIST_TYPE}"] = list_type_src
         else
-          data["ip_"+LIST_TYPE] = "none"
+          data["ip_#{LIST_TYPE}"] = 'none'
         end
       else
         score_src = -1
         params = {}
-        params["http"] = "asynchronous"
-        params["process"] = "complete"
-        params["ip"] = src
+        params['http'] = 'asynchronous'
+        params['process'] = 'complete'
+        params['ip'] = src
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
       end
@@ -100,44 +100,44 @@ class AerospikeStore
         data_dst.delete(LIST_TYPE)
 
         unless list_type_dst.nil?
-          if list_type_dst == "black"
+          if list_type_dst == 'black'
             score_dst = 100
-          elsif list_type_dst == "white"
+          elsif list_type_dst == 'white'
             score_dst = 0
           end
-          data["ip_"+LIST_TYPE] = list_Type_dst
+          data["ip_#{LIST_TYPE}"] = list_Type_dst
         else
-          data["ip_"+LIST_TYPE] = "none"
+          data["ip_#{LIST_TYPE}"] = 'none'
         end
       else
         score_dst = -1
         params = {}
-        params["http"] = "asynchronous"
-        params["process"] =  "complete"
-        params["ip"] = dst
+        params['http'] = 'asynchronous'
+        params['process'] = 'complete'
+        params['ip'] = dst
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
       end
-      
+
       score_src = -1 unless score_src
       score_dst = -1 unless score_dst
 
-      if (score_src > 0 and score_dst > 0)
-        data[IP_DIRECTION] = "both"
+      if (score_src > 0 && score_dst > 0)
+        data[IP_DIRECTION] = 'both'
         if score_src > score_dst
-          data["ip_"+SCORE]  = score_src
+          data["ip_#{SCORE}"]  = score_src
         else
-          data["ip_"+SCORE] = score_dst
+          data["ip_#{SCORE}"] = score_dst
         end
       elsif score_src > 0
-        data[IP_DIRECTION] = "source"
-        data["ip_"+SCORE] = score_src
+        data[IP_DIRECTION] = 'source'
+        data["ip_#{SCORE}"] = score_src
       elsif score_dst > 0
-        data[IP_DIRECTION] = "destination"
-        data["ip_"+SCORE] = score_dst
+        data[IP_DIRECTION] = 'destination'
+        data["ip_#{SCORE}"] = score_dst
       else
-        data[IP_DIRECTION] = "none"
-        data["ip_"+SCORE] = -1
+        data[IP_DIRECTION] = 'none'
+        data["ip_#{SCORE}"] = -1
       end
 
     elsif !src.nil?
@@ -147,44 +147,43 @@ class AerospikeStore
         score_src = data_src[SCORE]
         data_src.delete(SCORE)
         list_type_src = data_src[LIST_TYPE]
-        #TODO: we dont need to delete list_type_src??
-        
+        # TODO: we dont need to delete list_type_src??
         unless list_type_src.nil?
-          if list_type_src == "black" 
+          if list_type_src == 'black'
             score_src = 100
-          elsif list_type_src == "white"
+          elsif list_type_src == 'white'
             score_src = 0
           end
-          data["ip_"+LIST_TYPE] =  list_type_src
+          data["ip_#{LIST_TYPE}"] = list_type_src
         else
-          data["ip_"+LIST_TYPE] = "none"
+          data["ip_#{LIST_TYPE}"] = 'none'
         end
 
         score_src = -1 unless score_src
 
         if (score_src > 0)
-          data[IP_DIRECTION] = "source"
+          data[IP_DIRECTION] = 'source'
           data["ip_"+SCORE] = score_src
         else
-          data[IP_DIRECTION] = "none"
+          data[IP_DIRECTION] = 'none'
           data["ip_"+SCORE] = -1
         end
       else
-        data[IP_DIRECTION] = "none"
+        data[IP_DIRECTION] = 'none'
         data["ip_"+SCORE] = -1
 
         params = {}
-        params["http"] = "asynchronous"
-        params["process"] = "complete"
-        params["ip"] = src
+        params['http'] = 'asynchronous'
+        params['process'] = 'complete'
+        params['ip'] = src
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
       end
 
       params = {}
-      params["http"] = "asynchronous"
-      params["process"] = "complete"
-      params["ip"] = dst
+      params['http'] = 'asynchronous'
+      params['process'] = 'complete'
+      params['ip'] = dst
 
       Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
 
@@ -197,48 +196,46 @@ class AerospikeStore
 
       unless data_dst.empty?
         unless list_type_src.nil?
-          if list_type_src == "black"
+          if list_type_src == 'black'
             score_dst = 100
-          elsif list_type_src == "white"
+          elsif list_type_src == 'white'
             score_dst = 0
           end
-          data["ip_"+LIST_TYPE] = list_type_src
+          data["ip_#{LIST_TYPE}"] = list_type_src
         else
-          data["ip_"+LIST_TYPE] = "none"
+          data["ip_#{LIST_TYPE}"] = 'none'
         end
 
         score_dst = -1 unless score_dst
 
         if score_dst > 0
-          data[IP_DIRECTION] = "destionation"
-          data["ip_"+SCORE] = score_dst
+          data[IP_DIRECTION] = 'destionation'
+          data["ip_#{SCORE}"] = score_dst
         else
-          data[IP_DIRECTION] = "none"
-          data["ip_"+SCORE] = -1
+          data[IP_DIRECTION] = 'none'
+          data["ip_#{SCORE}"] = -1
         end
 
       else
-        data[IP_DIRECTION] = "none"
-        data["ip_"+SCORE] = -1
+        data[IP_DIRECTION] = 'none'
+        data["ip_#{SCORE}"] = -1
 
         params = {}
-        params["http"] = "asynchronous"
-        params["process"] = "complete"
-        params["ip"] = dst
+        params['http'] = 'asynchronous'
+        params['process'] = 'complete'
+        params['ip'] = dst
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
       end
     end
-    
-    return data
+    data
   end
-
 
   def enrich_hash_scores(message)
     data = {}
     data.merge!(message)
 
-    hash = message["hash"]
+    hash = message['hash']
 
     unless hash.nil?
       hash_key = Key.new(@namespace,"hashScores", hash) rescue nil
@@ -252,28 +249,28 @@ class AerospikeStore
         data_hash.delete(SCORE)
 
         unless list_type.nil?
-          if list_type == "black"
+          if list_type == 'black'
             score = 100
-          elsif list_type == "white"
+          elsif list_type == 'white'
             score = 0
           end
-          data["hash_"+LIST_TYPE] = list_type
+          data["hash_#{LIST_TYPE}"] = list_type
         else
-          data["hash_"+LIST_TYPE] = "none"
+          data["hash_#{LIST_TYPE}"] = "none"
         end
-        
+
         score = -1 unless score
 
-        data["hash_"+SCORE] = score
+        data["hash_#{SCORE}"] = score
 
       else
-        data["hash_"+SCORE] = -1
-        data[LIST_TYPE] = "none"
+        data["hash_#{SCORE}"] = -1
+        data[LIST_TYPE] = 'none'
 
         params = {}
-        params["http"] = "asynchronous"
-        params["process"] = "complete"
-        params["hash"] = hash
+        params['http'] = 'asynchronous'
+        params['process'] = 'complete'
+        params['hash'] = hash
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
       end
@@ -285,7 +282,7 @@ class AerospikeStore
   def enrich_url_scores(message)
     data = {}
     data.merge!message
-    url = message["url"]
+    url = message['url']
 
     unless url.nil?
       url_key = Key.new(@namespace, "urlScores", url) rescue nil
@@ -298,37 +295,36 @@ class AerospikeStore
         score = url_hash[SCORE]
 
         unless list_type.nil?
-          if list_type == "black"
+          if list_type == 'black'
             score = 100
-          elsif list_type == "white"
+          elsif list_type == 'white'
             score = 0
           end
-          data["url_"+LIST_TYPE] = list_type
+          data["url_#{LIST_TYPE}"] = list_type
         else
-          data["url_"+LIST_TYPE] = "none"
+          data["url_#{LIST_TYPE}"] = 'none'
         end
 
         score = -1 unless score
-        data["url_"+SCORE] = score
+        data["url_#{SCORE}"] = score
       else
-        data["url_"+SCORE] = -1
-        data[LIST_TYPE] = "none"
+        data["url_#{SCORE}"] = -1
+        data[LIST_TYPE] = 'none'
 
         params = {}
-        params["http"] = "asynchronous"
-        params["process"] = "complete"
-        params["url"] = url
+        params['http'] = 'asynchronous'
+        params['process'] = 'complete'
+        params['url'] = url
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
       end
     end
 
-
-    return data
+    data
   end
 
   def make_random_reputation_url
     random_reputation_server = @reputation_servers.sample
-    return "http://#{random_reputation_server}/reputation/v1/malware/query";
+    "http://#{random_reputation_server}/reputation/v1/malware/query"
   end
 end
