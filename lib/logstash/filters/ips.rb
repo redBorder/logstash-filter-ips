@@ -1,4 +1,5 @@
 # encoding: utf-8
+
 require "logstash/filters/base"
 require "logstash/namespace"
 
@@ -12,67 +13,63 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
 
   config_name "ips"
 
-  config :aerospike_server,          :validate => :string,  :default => "",                             :required => false
-  config :aerospike_namespace,       :validate => :string,  :default => "malware",                      :required => false
-  config :counter_store_counter,     :validate => :boolean, :default => false,                          :required => false
-  config :flow_counter,              :validate => :boolean, :default => false,                          :required => false
-  config :reputation_servers,        :validate => :array,   :default => ["127.0.0.1:7777"],             :require => false
+  config :aerospike_server,          :validate => :string,  :default => "",                           :required => false
+  config :aerospike_namespace,       :validate => :string,  :default => "malware",                    :required => false
+  config :counter_store_counter,     :validate => :boolean, :default => false,                        :required => false
+  config :flow_counter,              :validate => :boolean, :default => false,                        :required => false
+  config :reputation_servers,        :validate => :array,   :default => ["127.0.0.1:7777"],           :required => false
 
   # DATASOURCE="rb_flow"
   DELAYED_REALTIME_TIME = 15
 
   public
   def register
-    @dimensions = ["timestamp","src","dst","sensor_name","sensor_id","client_mac","sensor_uuid"]
+    @dimensions = ['timestamp', 'src', 'dst', 'sensor_name', 'sensor_id', 'client_mac', 'sensor_uuid']
 
     # Add instance variables
     @aerospike_server = AerospikeConfig::servers if @aerospike_server.empty?
-    @aerospike_server = @aerospike_server.sample if @aerospike_server.class.to_s == "Array"
+    @aerospike_server = @aerospike_server.sample if @aerospike_server.instance_of?(Array)
     @aerospike = nil
     @aerospike_store = nil
     register_aerospike_and_set_aerospike_store
-
-  end # def register
-
-  public
+  end
 
   def register_aerospike_and_set_aerospike_store
     begin
-      host,port = @aerospike_server.split(":")
+      host, port = @aerospike_server.split(':')
       @aerospike = Client.new(Host.new(host, port))
-      @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace,  @reputation_servers)
-    rescue Aerospike::Exceptions::Aerospike => ex
+      @aerospike_store = AerospikeStore.new(@aerospike, @aerospike_namespace, @reputation_servers)
+    rescue Aerospike::Exceptions::Aerospike => e
       @aerospike = nil
       @aerospike_store = nil
-      @logger.error(ex.message)
+      @logger.error(e.message)
     end
   end
 
   def size_to_range(size)
-    range  = nil
-    if (size < 1024)
-        range =  "<1kB"
-    elsif(size >= 1024 && size < (1024*1024))
-        range = "1kB-1MB"
-    elsif(size >= (1024*1024) && size < (10*1024*1024))
-        range = "1MB-10MB"
-    elsif(size >= (10*1024*1024) && size < (50*1024*1024))
-        range = "10MB-50MB"
-    elsif(size >= (50*1024*1024) && size < (100*1024*1024))
-        range = "50MB-100MB"
-    elsif(size >= (100*1024*1024) && size < (500*1024*1024))
-        range = "100MB-500MB"
-    elsif(size >= (500*1024*1024) && size < (1024*1024*1024))
-        range = "500MB-1GB"
-    elsif(size >= (1024*1024*1024))
-        range = ">1GB"
+    range = nil
+    if size < 1024
+      range = '<1kB'
+    elsif size >= 1024 && size < (1024 * 1024)
+      range = '1kB-1MB'
+    elsif size >= (1024 * 1024) && size < (10 * 1024 * 1024)
+      range = '1MB-10MB'
+    elsif size >= (10 * 1024 * 1024) && size < (50 * 1024 * 1024)
+      range = '10MB-50MB'
+    elsif size >= (50 * 1024 * 1024 && size < (100 * 1024 * 1024))
+      range = '50MB-100MB'
+    elsif size >= (100 * 1024 * 1024) && size < (500 * 1024 * 1024)
+      range = '100MB-500MB'
+    elsif size >= (500 * 1024 * 1024) && size < (1024 * 1024 * 1024)
+      range = '500MB-1GB'
+    elsif size >= (1024 * 1024 * 1024)
+      range = '>1GB'
     end
 
-    return range
+    range
   end
 
   def filter(event)
-
     # Solve the problem that happen when:
     # at time of registering the plugin the
     # aerospike was not there
@@ -81,32 +78,32 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
     message = {}
     message = event.to_hash
 
-    generated_events = [] 
+    generated_events = []
 
-    if message[SHA256] 
+    if message[SHA256]
       to_druid = {}
       timestamp = message[TIMESTAMP]
       hash = message[SHA256]
       to_druid[HASH] = hash
       to_druid[TIMESTAMP] = timestamp
-      to_druid[TYPE] = "ips"
+      to_druid[TYPE] = 'ips'
 
-      file_hostname = message[FILE_HOSTNAME] || ""
-      file_uri = message[FILE_URI] || ""
+      file_hostname = message[FILE_HOSTNAME] || ''
+      file_uri = message[FILE_URI] || ''
 
-      if !file_hostname.empty? and !file_uri.empty?
-        url = "http://" + file_hostname + file_uri
+      if !file_hostname.empty? && !file_uri.empty?
+        url = "http://#{file_hostname}#{file_uri}"
         to_druid[URL] = url
-        @aerospike_store.update_hash_times(timestamp, url, "url")
+        @aerospike_store.update_hash_times(timestamp, url, 'url')
       end
 
       file_name = File.basename(file_hostname+file_uri) rescue file_name = file_uri
-      
-      to_druid[FILE_NAME] = file_name unless file_name.nil? or file_name.empty?
+
+      to_druid[FILE_NAME] = file_name unless file_name.nil? || file_name.empty?
 
       @dimensions.each do |dimension|
         value = message[dimension]
-        
+
         to_druid[dimension] = value unless value.nil?
       end
 
@@ -115,18 +112,18 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       to_druid[FILE_SIZE] = size_to_range(file_size) unless file_size.nil?
 
       if message.key?FILE_HOSTNAME
-        to_druid[APPLICATION_ID_NAME] = "http"
+        to_druid[APPLICATION_ID_NAME] = 'http'
       elsif message.key?EMAIL_SENDER
-        to_druid[APPLICATION_ID_NAME] = "smtp"
-      elsif message.key?"ftp_user"
-        to_druid[APPLICATION_ID_NAME] = "ftp"
-        to_druid["client_id"] = message["ftp_user"]
-      elsif message.key?"smb_uid"
-        to_druid[APPLICATION_ID_NAME] = "smb"
-        to_druid["client_id"] = message["smb_uid"]
+        to_druid[APPLICATION_ID_NAME] = 'smtp'
+      elsif message.key?'ftp_user'
+        to_druid[APPLICATION_ID_NAME] = 'ftp'
+        to_druid['client_id'] = message['ftp_user']
+      elsif message.key?'smb_uid'
+        to_druid[APPLICATION_ID_NAME] = 'smb'
+        to_druid['client_id'] = message['smb_uid']
       end
-      
-      @aerospike_store.update_hash_times(timestamp, hash, "hash")
+
+      @aerospike_store.update_hash_times(timestamp, hash, 'hash')
 
       hash_message = @aerospike_store.enrich_hash_scores(to_druid)
       url_message = @aerospike_store.enrich_url_scores(hash_message)
@@ -139,5 +136,5 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
       end
     end
     event.cancel
-  end  # def filter(event)
-end # class LogStash::Filters::Ips
+  end
+end
