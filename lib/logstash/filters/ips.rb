@@ -80,26 +80,30 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
 
     generated_events = []
 
-    if message[SHA256]
+    if message['sha256']
       to_druid = {}
-      timestamp = message[TIMESTAMP]
-      hash = message[SHA256]
-      to_druid[HASH] = hash
-      to_druid[TIMESTAMP] = timestamp
-      to_druid[TYPE] = 'ips'
+      timestamp = message['timestamp']
+      hash = message['sha256']
+      to_druid['hash'] = hash
+      to_druid['timestamp'] = timestamp
+      to_druid['type'] = 'ips'
 
-      file_hostname = message[FILE_HOSTNAME] || ''
-      file_uri = message[FILE_URI] || ''
+      file_hostname = message['file_hostname'] || ''
+      file_uri = message['file_uri'] || ''
 
       if !file_hostname.empty? && !file_uri.empty?
         url = "http://#{file_hostname}#{file_uri}"
-        to_druid[URL] = url
+        to_druid['url'] = url
         @aerospike_store.update_hash_times(timestamp, url, 'url')
       end
 
-      file_name = File.basename(file_hostname+file_uri) rescue file_name = file_uri
+      begin
+        file_name = File.basename(file_hostname + file_uri)
+      rescue
+        file_name = file_uri
+      end
 
-      to_druid[FILE_NAME] = file_name unless file_name.nil? || file_name.empty?
+      to_druid['file_name'] = file_name unless file_name.nil? || file_name.empty?
 
       @dimensions.each do |dimension|
         value = message[dimension]
@@ -107,19 +111,19 @@ class LogStash::Filters::Ips < LogStash::Filters::Base
         to_druid[dimension] = value unless value.nil?
       end
 
-      file_size = message[FILE_SIZE]
+      file_size = message['file_size']
 
-      to_druid[FILE_SIZE] = size_to_range(file_size) unless file_size.nil?
+      to_druid['file_size'] = size_to_range(file_size) unless file_size.nil?
 
-      if message.key?FILE_HOSTNAME
-        to_druid[APPLICATION_ID_NAME] = 'http'
-      elsif message.key?EMAIL_SENDER
-        to_druid[APPLICATION_ID_NAME] = 'smtp'
-      elsif message.key?'ftp_user'
-        to_druid[APPLICATION_ID_NAME] = 'ftp'
+      if message.key?('file_hostname')
+        to_druid['application_id_name'] = 'http'
+      elsif message.key?('email_sender')
+        to_druid['application_id_name'] = 'smtp'
+      elsif message.key?('ftp_user')
+        to_druid['application_id_name'] = 'ftp'
         to_druid['client_id'] = message['ftp_user']
-      elsif message.key?'smb_uid'
-        to_druid[APPLICATION_ID_NAME] = 'smb'
+      elsif message.key?('smb_uid')
+        to_druid['application_id_name'] = 'smb'
         to_druid['client_id'] = message['smb_uid']
       end
 
