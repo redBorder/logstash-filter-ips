@@ -275,7 +275,7 @@ class AerospikeStore
 
   def enrich_url_scores(message)
     data = {}
-    data.merge!message
+    data.merge!(message)
     url = message['url']
 
     unless url.nil?
@@ -284,26 +284,25 @@ class AerospikeStore
       url_hash = @aerospike.get(url_key).bins rescue {}
 
       unless url_hash.empty?
-        list_type = url_hash[LIST_TYPE]
-        url_hash.delete(LIST_TYPE)
-        score = url_hash[SCORE]
+        list_type = url_hash['list_type']
+        url_hash.delete('list_type')
+        score = url_hash['score']
 
-        unless list_type.nil?
-          if list_type == 'black'
-            score = 100
-          elsif list_type == 'white'
-            score = 0
-          end
-          data["url_#{LIST_TYPE}"] = list_type
-        else
+        if list_type.nil?
           data["url_#{LIST_TYPE}"] = 'none'
+        elsif list_type == 'black'
+          score = 100
+          data["url_#{LIST_TYPE}"] = list_type
+        elsif list_type == 'white'
+          score = 0
+          data["url_#{LIST_TYPE}"] = list_type
         end
 
         score = -1 unless score
         data["url_#{SCORE}"] = score
       else
         data["url_#{SCORE}"] = -1
-        data[LIST_TYPE] = 'none'
+        data['list_type'] = 'none'
 
         params = {}
         params['http'] = 'asynchronous'
