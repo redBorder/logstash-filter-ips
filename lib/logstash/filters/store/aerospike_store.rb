@@ -242,28 +242,7 @@ class AerospikeStore
 
       data_hash = @aerospike.get(hash_key).bins rescue {}
 
-      unless data_hash.empty?
-        list_type = data_hash[LIST_TYPE]
-        data_hash.delete(LIST_TYPE)
-        score = data_hash[SCORE]
-        data_hash.delete(SCORE)
-
-        unless list_type.nil?
-          if list_type == 'black'
-            score = 100
-          elsif list_type == 'white'
-            score = 0
-          end
-          data["hash_#{LIST_TYPE}"] = list_type
-        else
-          data["hash_#{LIST_TYPE}"] = "none"
-        end
-
-        score = -1 unless score
-
-        data["hash_#{SCORE}"] = score
-
-      else
+      if data_hash.empty?
         data["hash_#{SCORE}"] = -1
         data[LIST_TYPE] = 'none'
 
@@ -273,10 +252,28 @@ class AerospikeStore
         params['hash'] = hash
 
         Manticore.post(make_random_reputation_url, body: params.to_json.to_s).body
+      else
+        list_type = data_hash['list_type']
+        data_hash.delete('list_type')
+        score = data_hash['score']
+        data_hash.delete('score')
+
+        if list_type.nil?
+          data["hash_#{LIST_TYPE}"] = 'none'
+        elsif list_type == 'black'
+          score = 100
+          data["hash_#{LIST_TYPE}"] = list_type
+        elsif list_type == 'white'
+          score = 0
+          data["hash_#{LIST_TYPE}"] = list_type
+        end
+
+        score = -1 unless score
+
+        data["hash_#{SCORE}"] = score
       end
     end
-
-    return data
+    data
   end
 
   def enrich_url_scores(message)
